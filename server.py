@@ -2,7 +2,7 @@ import os
 import sys
 import asyncio
 import traceback
-
+import shutil
 import nodes
 import folder_paths
 import execution
@@ -14,10 +14,16 @@ import struct
 from PIL import Image, ImageOps
 from PIL.PngImagePlugin import PngInfo
 from io import BytesIO
+import os
+import shutil
+import mimetypes
+import urllib
 
 try:
     import aiohttp
     from aiohttp import web
+    from aiohttp.web_exceptions import HTTPBadRequest
+    from aiohttp.web import FileField, json_response
 except ImportError:
     print("Module 'aiohttp' not installed. Please install it via:")
     print("pip install aiohttp")
@@ -131,7 +137,7 @@ class PromptServer():
         def get_embeddings(self):
             embeddings = folder_paths.get_filename_list("embeddings")
             return web.json_response(list(map(lambda a: os.path.splitext(a)[0], embeddings)))
-
+ 
         @routes.get("/extensions")
         async def get_extensions(request):
             files = glob.glob(os.path.join(
@@ -250,6 +256,67 @@ class PromptServer():
                         original_pil.save(filepath, compress_level=4, pnginfo=metadata)
 
             return image_upload(post, image_save_function)
+        
+        
+        @routes.post("/uploadmodel/{endpoint_name}")
+        async def upload_modelfile(request):
+            post = await request.post()
+            base_directory = folder_paths.get_models_directory()
+
+            endpoint_name = request.match_info['endpoint_name']
+            destination = os.path.join(base_directory, endpoint_name)
+
+            # Create the destination directory if it doesn't exist
+            os.makedirs(destination, exist_ok=True)
+
+            # Process the file or download from URL based on input
+            if 'file' in post:
+                file = post['file']
+
+                # Save the file
+                filename = file.filename
+                if not filename:
+                    raise HTTPBadRequest(reason='Filename is required')
+
+                subfolder = post.get("subfolder", "")
+                full_output_folder = os.path.join(destination, os.path.normpath(subfolder))
+                filepath = os.path.abspath(os.path.join(full_output_folder, filename))
+
+                if os.path.commonpath((destination, filepath)) != destination:
+                    raise HTTPBadRequest(reason='Invalid file path')
+
+                if not os.path.exists(full_output_folder):
+                    os.makedirs(full_output_folder)
+
+                split = os.path.splitext(filename)
+
+                overwrite = post.get("overwrite", "")
+                if overwrite.lower() == "true" or overwrite == "1":
+                    pass
+                else:
+                    i = 1
+                    while os.path.exists(filepath):
+                        filename = f"{split[0]} ({i}){split[1]}"
+                        filepath = os.path.join(full_output_folder, filename)
+                        i += 1
+
+                with open(filepath, "wb") as f:
+                    shutil.copyfileobj(file.file, f)
+                folder_paths.clear_cached_folder(endpoint_name)
+                return json_response({"name": filename, "subfolder": subfolder, "type": endpoint_name})
+            elif 'url' in post:
+                url = post['url']
+
+                # Generate a filename based on the URL
+                filename = os.path.join(destination, os.path.basename(url))
+
+                # Download the file from the URL
+                urllib.request.urlretrieve(url, filename)
+
+                folder_paths.clear_cached_folder(endpoint_name)
+                return json_response({"name": os.path.basename(url), "subfolder": "", "type": endpoint_name})
+            else:
+                raise HTTPBadRequest(reason='Either file or URL must be provided')
 
         @routes.get("/view")
         async def view_image(request):

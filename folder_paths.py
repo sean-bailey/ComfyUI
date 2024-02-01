@@ -70,6 +70,10 @@ def get_input_directory():
     global input_directory
     return input_directory
 
+def get_models_directory():
+    global models_dir
+    return models_dir
+
 
 #NOTE: used in http server so don't put folders that should not be accessed remotely
 def get_directory_by_type(type_name):
@@ -213,6 +217,13 @@ def cached_filename_list_(folder_name):
                 return None
 
     return out
+
+def clear_cached_folder(folder_name):
+    global filename_list_cache
+    global folder_names_and_paths
+    #If we wipe the cache for that folder, we have existing functionality which will update that bit in the cache again, which the rest of the system relies upon
+    filename_list_cache[folder_name] = None
+
 
 def get_filename_list(folder_name):
     out = cached_filename_list_(folder_name)
