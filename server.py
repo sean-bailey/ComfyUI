@@ -257,7 +257,7 @@ class PromptServer():
 
             return image_upload(post, image_save_function)
         
-        
+        #This allows you to upload weights to the various folders in the model directory, then clears the cache of that folder.
         @routes.post("/uploadmodel/{endpoint_name}")
         async def upload_modelfile(request):
             post = await request.post()

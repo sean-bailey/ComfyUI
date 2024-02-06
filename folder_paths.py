@@ -226,7 +226,7 @@ def get_filename_list(folder_name):
         filename_list_cache[folder_name] = out
     return list(out[0])
 
-
+#This clears and reloads the cache of a given folder... allowing updates without server restarts!
 def clear_cached_folder(folder_name):
     global filename_list_cache
     global folder_names_and_paths
